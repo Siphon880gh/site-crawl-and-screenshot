@@ -141,7 +141,8 @@ duplicates and grayed out.
 
 ## Output
 
-Screenshots are written to `screenshots/<jobId>/` and served at
+Screenshots are written to `screenshots/<hostname>_<YYYY.MM.DD>_<HHMM>_utc/` (UTC
+timestamp at crawl start; `_2` suffix if that folder already exists) and served at
 `/screenshots/<jobId>/`.
 
 ## Configuration

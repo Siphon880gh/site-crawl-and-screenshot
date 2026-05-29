@@ -5,8 +5,43 @@ const path = require('path');
 
 const IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.webp']);
 
+/** e.g. mixotype.com_2026.05.29_0300_utc or …_utc_2 when colliding */
+const GALLERY_ID_RE =
+  /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?_\d{4}\.\d{2}\.\d{2}_\d{4}_utc(?:_\d+)?$/;
+
 function isJobDir(name) {
-  return /^[a-f0-9]{12}$/.test(name);
+  return GALLERY_ID_RE.test(name);
+}
+
+function hostnameFromUrl(url) {
+  return new URL(url).hostname.toLowerCase();
+}
+
+function utcTimestampSuffix(date = new Date()) {
+  const y = date.getUTCFullYear();
+  const mo = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const h = String(date.getUTCHours()).padStart(2, '0');
+  const mi = String(date.getUTCMinutes()).padStart(2, '0');
+  return `_${y}.${mo}.${day}_${h}${mi}_utc`;
+}
+
+/**
+ * Gallery folder id: <hostname>_<YYYY.MM.DD>_<HHMM>_utc
+ * Appends _2, _3, … if that folder already exists under shotsDir.
+ */
+function buildGalleryId(url, shotsDir) {
+  const host = hostnameFromUrl(url).replace(/[^a-z0-9.-]+/g, '_');
+  const base = `${host}${utcTimestampSuffix()}`;
+  if (!shotsDir || !fs.existsSync(shotsDir)) return base;
+
+  let id = base;
+  let n = 2;
+  while (fs.existsSync(path.join(shotsDir, id))) {
+    id = `${base}_${n}`;
+    n += 1;
+  }
+  return id;
 }
 
 function readMeta(dir) {
@@ -92,4 +127,10 @@ function writeGalleryMeta(outDir, { url, jobId }) {
   );
 }
 
-module.exports = { listGalleries, getGallery, writeGalleryMeta };
+module.exports = {
+  listGalleries,
+  getGallery,
+  writeGalleryMeta,
+  buildGalleryId,
+  isJobDir,
+};

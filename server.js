@@ -1,12 +1,11 @@
 'use strict';
 
 const path = require('path');
-const crypto = require('crypto');
 const express = require('express');
 
 const { checkHealth } = require('./src/health');
 const { getOutboundIp } = require('./src/outbound-ip');
-const { listGalleries, getGallery, writeGalleryMeta } = require('./src/galleries');
+const { listGalleries, getGallery, writeGalleryMeta, buildGalleryId } = require('./src/galleries');
 const { launchBrowser } = require('./src/browser');
 const { crawl } = require('./src/crawler');
 const { screenshotPages } = require('./src/screenshotter');
@@ -23,7 +22,7 @@ app.use('/screenshots', express.static(SHOTS_DIR));
 const jobs = new Map();
 
 function createJob(opts) {
-  const id = crypto.randomBytes(6).toString('hex');
+  const id = buildGalleryId(opts.url, SHOTS_DIR);
   const job = {
     id,
     ...opts,

@@ -12,10 +12,10 @@ Parent overview: [AGENTS_CODE_REFERENCE.md](./AGENTS_CODE_REFERENCE.md)
 
 | File | Lines | Role |
 |------|-------|------|
-| `index.html` | ~121 | Main app: scan controls, link tree, gallery |
+| `index.html` | ~122 | Main app: scan controls, link tree, gallery |
 | `credits.html` | ~63 | Author bio, links; nav back to `/` |
-| `style.css` | ~446 | Shared dark theme (CSS variables in `:root`) |
-| `app.js` | ~502 | All client logic (loaded only on index) |
+| `style.css` | ~490 | Shared dark theme (CSS variables in `:root`) |
+| `app.js` | ~530 | All client logic (loaded only on index) |
 
 Branding: **Site Crawl and Screenshot** (rebrand commit `b95396e`). Logo character `◎` in header.
 
@@ -31,7 +31,7 @@ Top to bottom:
 4. **Actions** — Map links / Screenshot pages / Stop
 5. **Stats** — total / unique / duplicates (hidden until crawl completes)
 6. **Progress bar** — label + fill width
-7. **Results** — link map tree (`#tree`), screenshot gallery selector + grid
+7. **Results** — link map tree (`#tree`), screenshot gallery selector + grid (`#galleryViewMode`, `#galleryToggleAll`)
 8. **Footer** — link to credits, Weng Industries
 
 Element IDs are the contract with `app.js`; preserve them when editing markup.
@@ -53,7 +53,9 @@ const state = {
   expectedShots: 0,
   viewingGalleryId: null,
   galleries: [],
-  expandedGalleryByFolder: new Map(), // persists expand/collapse per folder
+  expandedGalleryByFolder: new Map(), // persists expand/collapse per folder (full view)
+  galleryViewModeByFolder: new Map(), // 'full' | 'thumbnails' per folder
+  galleryImagesByFolder: new Map(),   // cached image list for re-render on view toggle
 };
 ```
 
@@ -72,9 +74,14 @@ Helper `$ = (id) => document.getElementById(id)`.
 ### Gallery (below IP section)
 
 - `loadGalleries(selectId?)` → `GET /api/galleries`, populates `#gallerySelect`
-- `openGallery(id)` → `GET /api/galleries/:id`, renders collapsible `<details>` rows
-- `renderGalleryRows`, `toggleAllGallery`, `updateGalleryToggleButton` — expand state stored in `state.expandedGalleryByFolder`
-- Live refresh on SSE `gallery:updated` and after `shot:result`
+- `openGallery(id)` → `GET /api/galleries/:id`, caches images in `state.galleryImagesByFolder`, calls `renderGalleryRows`
+- **View modes** (per folder, `#galleryViewMode` button):
+  - **`full`** (default): vertical stack of collapsible `<details>` rows (`.gallery-row`) with full-width screenshots; **Expand all** / **Collapse all** via `#galleryToggleAll`
+  - **`thumbnails`**: responsive grid (`.gallery-thumbs` / `.gallery-thumb`) of small previews; click opens full PNG in a new tab; **Expand all** hidden
+- `toggleGalleryViewMode()` flips mode in `state.galleryViewModeByFolder` and re-renders from cache
+- `renderGalleryFullStack`, `renderGalleryThumbnails`, `updateGalleryViewModeButton`, `toggleAllGallery`, `updateGalleryToggleButton`
+- Expand/collapse state (full mode only) in `state.expandedGalleryByFolder`
+- Live refresh on SSE `gallery:updated` and after `shot:result` (preserves view mode for that folder)
 
 ### Health (middle section)
 
@@ -83,8 +90,9 @@ Helper `$ = (id) => document.getElementById(id)`.
 ### Link tree rendering (middle section)
 
 - `renderTree(nodes, rootId)` — builds nested `.node` divs from flat `nodes` + `children` id refs
-- `renderNode(node)` — badge (`L{n}` or `dup`), link, empty `.badge.shot` placeholder
-- Duplicate nodes get class `dup` (gray styling in CSS)
+- `renderNode(node)` — badge (`L{n}` or `dup`), link; **unique nodes only** get an empty `.badge.shot` placeholder
+- Duplicate nodes get class `dup` (gray styling in CSS); no shot badge and no green shot indicator
+- `clearDupShotUi(url, exceptId)` — strips `.active` / `.shot-done` / `.shot-error` from duplicate rows sharing a URL (safety net)
 
 ### Progress UI
 
@@ -102,9 +110,9 @@ Important UI reactions:
 | `crawl:visit` | Progress text with queue counts |
 | `crawl:result` | `renderTree`, `updateStats`, `finishCrawl` |
 | `crawl:fatal` | Error progress, `resetButtons` |
-| `shot:start` | Highlight node `.active`, scroll into view, progress % |
-| `shot:done` | `.shot-done`, badge `✓ shot` |
-| `shot:error` | `.shot-error`, badge `✗ failed` |
+| `shot:start` | Unique nodes only: `.active`, badge `📷 shooting`, scroll into view; `clearDupShotUi` |
+| `shot:done` | Unique nodes only: `.shot-done`, badge `✓ shot`; `clearDupShotUi` |
+| `shot:error` | Unique nodes only: `.shot-error`, badge `✗ failed`; `clearDupShotUi` |
 | `gallery:updated` | Refresh gallery list; re-open if viewing same job |
 | `shot:result` | Complete progress, `resetButtons`, refresh galleries |
 
@@ -133,8 +141,9 @@ Near the top: CSS custom properties (`--bg`, `--panel`, `--accent`, `--dup`, `--
 Key class groups:
 
 - **Layout:** `.topbar`, `.layout`, `.panel`, `.controls`, `.results`
-- **Tree:** `.node`, `.node.dup`, `.node.active`, `.node.shot-done`, `.badge`, `.node-children`
-- **Gallery:** `.gallery-bar`, `.gallery-row` (`<details>`), `.gallery-list`
+- **Tree:** `.node`, `.node.dup`, `.node.active`, `.node.shot-done`, `.badge`, `.badge.shot`, `.node-children`
+- **Dup + shot:** `.node.dup .badge.shot` forced `display: none` (shot indicators only on unique rows)
+- **Gallery:** `.gallery-bar`, `.gallery-row` (`<details>`), `.gallery-list`, `.gallery-list--thumbnails`, `.gallery-thumbs`, `.gallery-thumb`
 - **IP tip:** `.ip-tip`, `.ip-tip--bad`
 - **Credits page:** `.credits-page`, `.credits-card`, `.credit-link` (used by `credits.html`)
 
@@ -156,6 +165,7 @@ Standalone page sharing `style.css`. No `app.js`. Added in commit `1df6a9b`:
 
 1. **Event types are the API contract** — server and `handleEvent()` must stay aligned.
 2. **No framework** — keep DOM APIs consistent; avoid introducing build tooling without explicit request.
-3. **Gallery expand state** is per-folder in memory only (not persisted).
+3. **Gallery UI state** (expand/collapse and full vs thumbnails view) is per-folder in memory only (not persisted).
 4. **Enter key** on URL field triggers scan (`keydown` listener at bottom of `app.js`).
 5. **Screenshot button** stays disabled until crawl yields at least one non-duplicate node.
+6. **Shot indicators** — only unique (non-`dup`) tree rows; duplicates must stay gray with no shot badge.

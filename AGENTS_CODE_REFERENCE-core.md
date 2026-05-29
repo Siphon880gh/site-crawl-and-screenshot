@@ -127,9 +127,10 @@ Main loop:
 
 Filesystem-only; no database.
 
-### `isJobDir(name)`
+### `isJobDir(name)` / `buildGalleryId(url, shotsDir)`
 
-Regex: `/^[a-f0-9]{12}$/` — matches job ids from server.
+- **`buildGalleryId`** — lowercased URL hostname + UTC suffix `_YYYY.MM.DD_HHMM_utc`; if the folder already exists under `shotsDir`, appends `_2`, `_3`, …
+- **`isJobDir`** — regex `GALLERY_ID_RE` (e.g. `blog.example.com_2026.05.29_0300_utc`)
 
 ### `listGalleries(shotsDir)`
 
@@ -211,4 +212,4 @@ health.js ──→ puppeteer (standalone launch for health)
 2. **Crawl depth** is controlled by server clamping `maxLevel` 0–6; crawler trusts passed value.
 3. **Screenshot timing** — `networkidle2` can hang on chatty sites; timeout is 45s per page.
 4. **Proxy credentials** must use `parseProxy` + `page.authenticate`; never pass user:pass in `--proxy-server`.
-5. **Gallery IDs** must remain 12 hex chars to match `isJobDir` validation.
+5. **Gallery IDs** must match `GALLERY_ID_RE` / `isJobDir` — keep `buildGalleryId` and listing logic in sync.

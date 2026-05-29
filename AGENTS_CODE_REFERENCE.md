@@ -60,7 +60,7 @@ server.js
     ├── src/health.js       → Puppeteer + Chrome launch probe
     └── src/outbound-ip.js  → resolve scanner egress IPv4
     ▼
-screenshots/<12-hex-job-id>/   (served at /screenshots/…)
+screenshots/<hostname>_<YYYY.MM.DD>_<HHMM>_utc/   (served at /screenshots/…)
 ```
 
 **Job lifecycle states:** `created` → `crawling` → `crawled` → `shooting` → `done` | `error` | `stopped`
@@ -78,16 +78,16 @@ ss/
 ├── README.md                 User-facing docs (not AI-specific)
 ├── AGENTS_CODE_REFERENCE*.md This documentation set
 ├── public/
-│   ├── index.html            (~121) Main scan UI
+│   ├── index.html            (~122) Main scan UI
 │   ├── credits.html          (~63)  Author/credits page
-│   ├── app.js                (~502) Client logic, SSE, gallery UI
-│   ├── style.css             (~446) Dark theme styles
+│   ├── app.js                (~530) Client logic, SSE, gallery UI (full + thumbnail views)
+│   ├── style.css             (~490) Dark theme styles
 │   └── me.jpeg               Avatar on credits page
 ├── src/
 │   ├── browser.js            (~72)  launchBrowser, newPage, parseProxy
 │   ├── crawler.js            (~171) BFS crawl, normalizeUrl, extractLinks
 │   ├── screenshotter.js      (~113) autoScroll, screenshotPages
-│   ├── galleries.js          (~95)  listGalleries, getGallery, writeGalleryMeta
+│   ├── galleries.js          (~130) listGalleries, buildGalleryId, writeGalleryMeta
 │   ├── health.js             (~103) checkHealth (+ CLI when run directly)
 │   └── outbound-ip.js        (~217) getOutboundIp (multi-mechanism fallback)
 └── screenshots/              Runtime output (gitignored except .gitkeep)
@@ -106,7 +106,7 @@ Near the end of `server.js`, Express listens on `PORT` (default 3000), serves `p
 ```
 User clicks "Map links"
   → POST /api/crawl { url, level, proxy }
-  → createJob() assigns 12-char hex id
+  → createJob() assigns gallery id: hostname + UTC timestamp suffix
   → async: launchBrowser → crawl() BFS
   → SSE events: crawl:visit, crawl:error, crawl:result, …
   → job.nodes populated; state → crawled | stopped | error
@@ -129,7 +129,7 @@ Each page: `networkidle2` load → autoScroll (lazy content) → full-page scree
 
 ### 4. Gallery browsing
 
-Independent of active jobs: `GET /api/galleries` lists past runs; `GET /api/galleries/:id` returns image metadata. UI can refresh during an active shoot via `gallery:updated` SSE events.
+Independent of active jobs: `GET /api/galleries` lists past runs; `GET /api/galleries/:id` returns image metadata. UI can refresh during an active shoot via `gallery:updated` SSE events. The gallery panel toggles between **full** (vertical stacked `<details>` rows with full-width images) and **thumbnails** (compact grid); mode is remembered per folder in client state only (see `AGENTS_CODE_REFERENCE-ui.md`).
 
 ### 5. Stop
 
@@ -162,8 +162,8 @@ Independent of active jobs: `GET /api/galleries` lists past runs; `GET /api/gall
 
 1. **Do not persist jobs** — restarting the server loses in-memory job state; only screenshot files survive.
 2. **Preserve SSE event shapes** — `public/app.js` `handleEvent()` switches on `evt.type`; adding types is safe; renaming breaks the UI.
-3. **Job IDs = gallery folder names** — 12 hex chars from `crypto.randomBytes(6)`; `galleries.js` validates with `/^[a-f0-9]{12}$/`.
-4. **Duplicate nodes** — never pass `isDuplicate` pages to `screenshotPages`; crawler marks them, server filters them.
+3. **Job IDs = gallery folder names** — `<hostname>_<YYYY.MM.DD>_<HHMM>_utc` from `buildGalleryId()` in `galleries.js` (collision suffix `_2`, `_3`, …); validated by `GALLERY_ID_RE` in `isJobDir`.
+4. **Duplicate nodes** — never pass `isDuplicate` pages to `screenshotPages`; crawler marks them, server filters them; UI shows shot badges only on unique rows (see `AGENTS_CODE_REFERENCE-ui.md`).
 5. **Browser lifecycle** — crawl errors close the browser; screenshot phase re-launches if needed; always closed in screenshot `finally`.
 6. **No auth** — app assumes trusted local/single-user use; do not expose publicly without adding protection.
 
@@ -175,7 +175,7 @@ Job creation and state (near top of `server.js`, below static middleware):
 
 ```javascript
 function createJob(opts) {
-  const id = crypto.randomBytes(6).toString('hex');
+  const id = buildGalleryId(opts.url, SHOTS_DIR);
   const job = {
     id, ...opts,
     state: 'created',

@@ -11,7 +11,13 @@ const state = {
   viewingGalleryId: null,
   galleries: [],
   expandedGalleryByFolder: new Map(),
+  galleryViewModeByFolder: new Map(),
+  galleryImagesByFolder: new Map(),
 };
+
+function galleryViewModeFor(folderId) {
+  return state.galleryViewModeByFolder.get(folderId) || 'full';
+}
 
 function expandedFilesFor(folderId) {
   if (!state.expandedGalleryByFolder.has(folderId)) {
@@ -107,7 +113,7 @@ async function openGallery(id) {
 
     state.viewingGalleryId = id;
     $('gallery').classList.remove('hidden');
-    $('galleryToggleAll').disabled = !data.images.length;
+    $('galleryViewMode').disabled = !data.images.length;
 
     const meta = $('galleryMeta');
     const parts = [`<strong>${data.id}</strong>`];
@@ -115,25 +121,93 @@ async function openGallery(id) {
     parts.push(` · ${data.images.length} screenshot${data.images.length === 1 ? '' : 's'}`);
     meta.innerHTML = parts.join('');
 
+    state.galleryImagesByFolder.set(data.id, data.images);
     renderGalleryRows(data.id, data.images);
   } catch (err) {
     $('galleryMeta').textContent = err.message;
     $('galleryGrid').innerHTML = '';
     $('gallery').classList.remove('hidden');
     $('galleryToggleAll').disabled = true;
+    $('galleryViewMode').disabled = true;
   }
+}
+
+function updateGalleryViewModeButton() {
+  const btn = $('galleryViewMode');
+  if (!state.viewingGalleryId) {
+    btn.disabled = true;
+    btn.textContent = 'Thumbnails';
+    return;
+  }
+  const images = state.galleryImagesByFolder.get(state.viewingGalleryId);
+  if (!images || !images.length) {
+    btn.disabled = true;
+    btn.textContent = 'Thumbnails';
+    return;
+  }
+  btn.disabled = false;
+  const mode = galleryViewModeFor(state.viewingGalleryId);
+  btn.textContent = mode === 'full' ? 'Thumbnails' : 'Full size';
+}
+
+function toggleGalleryViewMode() {
+  if (!state.viewingGalleryId) return;
+  const id = state.viewingGalleryId;
+  const images = state.galleryImagesByFolder.get(id);
+  if (!images || !images.length) return;
+  const next = galleryViewModeFor(id) === 'full' ? 'thumbnails' : 'full';
+  state.galleryViewModeByFolder.set(id, next);
+  renderGalleryRows(id, images);
 }
 
 function renderGalleryRows(folderId, images) {
   const grid = $('galleryGrid');
   grid.innerHTML = '';
+  grid.className = 'gallery-list';
   if (!images.length) {
     grid.innerHTML = '<p class="empty">No screenshots yet — they will appear here as they are captured.</p>';
     $('galleryToggleAll').disabled = true;
+    $('galleryToggleAll').classList.add('hidden');
+    updateGalleryViewModeButton();
     return;
   }
 
+  state.galleryImagesByFolder.set(folderId, images);
+  const mode = galleryViewModeFor(folderId);
+  if (mode === 'thumbnails') {
+    renderGalleryThumbnails(grid, images);
+    $('galleryToggleAll').disabled = true;
+    $('galleryToggleAll').classList.add('hidden');
+    updateGalleryViewModeButton();
+    return;
+  }
+
+  renderGalleryFullStack(grid, folderId, images);
+  updateGalleryViewModeButton();
+}
+
+function renderGalleryThumbnails(grid, images) {
+  grid.classList.add('gallery-list--thumbnails');
+  const wrap = document.createElement('div');
+  wrap.className = 'gallery-thumbs';
+  images.forEach((img) => {
+    const a = document.createElement('a');
+    a.className = 'gallery-thumb';
+    a.href = img.url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.title = img.file;
+    a.innerHTML = `
+      <img loading="lazy" src="${img.url}" alt="${img.file}">
+      <span class="gallery-thumb-name">${img.file}</span>`;
+    wrap.appendChild(a);
+  });
+  grid.appendChild(wrap);
+}
+
+function renderGalleryFullStack(grid, folderId, images) {
   const expanded = expandedFilesFor(folderId);
+  $('galleryToggleAll').classList.remove('hidden');
   $('galleryToggleAll').disabled = false;
   images.forEach((img) => {
     const row = document.createElement('details');
@@ -517,6 +591,7 @@ $('gallerySelect').addEventListener('change', onGallerySelectChange);
 $('galleryOpen').addEventListener('click', () => openGallery($('gallerySelect').value));
 $('galleryRefresh').addEventListener('click', () => loadGalleries());
 $('galleryToggleAll').addEventListener('click', toggleAllGallery);
+$('galleryViewMode').addEventListener('click', toggleGalleryViewMode);
 $('url').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') startScan();
 });

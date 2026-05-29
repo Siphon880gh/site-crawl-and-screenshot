@@ -27,7 +27,7 @@ Below the middleware setup, a module-level `Map` named `jobs` holds all active/c
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `id` | string | 12-char hex |
+| `id` | string | Gallery folder id (`hostname_YYYY.MM.DD_HHMM_utc`, optional `_2` suffix) |
 | `url` | string | Seed URL |
 | `maxLevel` | number | 0–6 |
 | `proxy` | string | Optional proxy URL |
