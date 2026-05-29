@@ -9,6 +9,7 @@ const { listGalleries, getGallery, writeGalleryMeta, buildGalleryId } = require(
 const { launchBrowser } = require('./src/browser');
 const { crawl } = require('./src/crawler');
 const { screenshotPages } = require('./src/screenshotter');
+const { ensureUrlScheme } = require('./src/ensure-url-scheme');
 
 const PORT = process.env.PORT || 3000;
 const SHOTS_DIR = path.join(__dirname, 'screenshots');
@@ -102,7 +103,7 @@ app.post('/api/crawl', async (req, res) => {
     return res.status(400).json({ error: 'A URL is required.' });
   }
   const maxLevel = Number.isFinite(+level) ? Math.max(0, Math.min(6, +level)) : 2;
-  const job = createJob({ url: String(url).trim(), maxLevel, proxy: proxy || '' });
+  const job = createJob({ url: ensureUrlScheme(url), maxLevel, proxy: proxy || '' });
   res.json({ jobId: job.id, maxLevel });
 
   // Run the crawl asynchronously.

@@ -72,6 +72,7 @@ Returns full gallery via `getGallery(SHOTS_DIR, id)` or 404 if invalid/empty.
 **Body:** `{ url, level?, proxy? }`
 
 - Validates non-empty `url`
+- Normalizes `url` via `ensureUrlScheme()` from `src/ensure-url-scheme.js` (prepends `https://` when no `http://` or `https://`)
 - Clamps `level` to 0–6 (default 2)
 - Responds immediately `{ jobId, maxLevel }`
 - Background: `state = 'crawling'` → `launchBrowser` → `crawl(...)` with `shouldStop: () => job.stop` and `onProgress: pushEvent`

@@ -89,7 +89,8 @@ ss/
 │   ├── screenshotter.js      (~113) autoScroll, screenshotPages
 │   ├── galleries.js          (~130) listGalleries, buildGalleryId, writeGalleryMeta
 │   ├── health.js             (~103) checkHealth (+ CLI when run directly)
-│   └── outbound-ip.js        (~217) getOutboundIp (multi-mechanism fallback)
+│   ├── outbound-ip.js        (~217) getOutboundIp (multi-mechanism fallback)
+│   └── ensure-url-scheme.js  (~14) ensureUrlScheme (bare hostname → https://)
 └── screenshots/              Runtime output (gitignored except .gitkeep)
 ```
 
@@ -106,6 +107,7 @@ Near the end of `server.js`, Express listens on `PORT` (default 3000), serves `p
 ```
 User clicks "Map links"
   → POST /api/crawl { url, level, proxy }
+  → ensureUrlScheme(url): prepends https:// when no http(s) scheme
   → createJob() assigns gallery id: hostname + UTC timestamp suffix
   → async: launchBrowser → crawl() BFS
   → SSE events: crawl:visit, crawl:error, crawl:result, …
@@ -194,7 +196,7 @@ Crawl POST handler (middle of `server.js`, in the routes section):
 app.post('/api/crawl', async (req, res) => {
   const { url, level, proxy } = req.body || {};
   const maxLevel = Number.isFinite(+level) ? Math.max(0, Math.min(6, +level)) : 2;
-  const job = createJob({ url: String(url).trim(), maxLevel, proxy: proxy || '' });
+  const job = createJob({ url: ensureUrlScheme(url), maxLevel, proxy: proxy || '' });
   res.json({ jobId: job.id, maxLevel });
   // async crawl…
 });

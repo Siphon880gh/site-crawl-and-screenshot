@@ -18,6 +18,21 @@ Parent overview: [AGENTS_CODE_REFERENCE.md](./AGENTS_CODE_REFERENCE.md)
 | `galleries.js` | ~95 | `listGalleries`, `getGallery`, `writeGalleryMeta` | server |
 | `health.js` | ~103 | `checkHealth` | server, CLI (`npm run health`) |
 | `outbound-ip.js` | ~217 | `getOutboundIp` | server |
+| `ensure-url-scheme.js` | ~14 | `ensureUrlScheme` | server (client mirrors logic in `app.js`) |
+
+---
+
+## `ensure-url-scheme.js`
+
+### `ensureUrlScheme(raw)`
+
+Near the top:
+
+- Trims input; returns empty string unchanged
+- If already starts with `http://` or `https://` (case-insensitive), returns as-is
+- Otherwise returns `https://${url}`
+
+Used by `POST /api/crawl` before `createJob()`. The UI applies the same logic in `public/app.js` `startScan()` and updates the URL input so the user sees the normalized value.
 
 ---
 
@@ -192,6 +207,7 @@ Returns `{ ok, ip, source, provider }` or `{ ok: false, error, tried, attempts }
 ```
 server.js
   → browser.launchBrowser
+  → ensure-url-scheme.ensureUrlScheme
   → crawler.crawl
   → screenshotter.screenshotPages
   → galleries.*

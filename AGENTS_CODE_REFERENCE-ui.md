@@ -124,7 +124,8 @@ Important UI reactions:
 
 ### User actions (lower section)
 
-- `startScan()` → `POST /api/crawl`, stores `state.jobId`, opens SSE
+- `ensureUrlScheme(raw)` — if the URL has no `http://` or `https://` prefix, prepends `https://` (mirrors server helper)
+- `startScan()` → normalizes `#url`, writes it back to the input, then `POST /api/crawl`, stores `state.jobId`, opens SSE
 - `startShots()` → `POST /api/screenshot` with delay from `#delay`
 - `stopJob()` → `POST /api/stop`
 

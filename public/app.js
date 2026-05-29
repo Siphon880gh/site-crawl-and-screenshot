@@ -26,6 +26,13 @@ function expandedFilesFor(folderId) {
   return state.expandedGalleryByFolder.get(folderId);
 }
 
+function ensureUrlScheme(raw) {
+  const url = String(raw).trim();
+  if (!url) return url;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `https://${url}`;
+}
+
 // ---- Outbound IP + Cloudflare tip ----------------------------------------
 async function loadOutboundIp(force = false) {
   const el = $('outboundIp');
@@ -522,11 +529,13 @@ function resetButtons() {
 }
 
 async function startScan() {
-  const url = $('url').value.trim();
+  let url = $('url').value.trim();
   if (!url) {
     $('url').focus();
     return;
   }
+  url = ensureUrlScheme(url);
+  $('url').value = url;
   const level = parseInt($('level').value, 10);
   const proxy = $('proxy').value.trim();
 
