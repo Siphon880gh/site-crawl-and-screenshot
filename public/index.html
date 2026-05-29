@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Site Scanner</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">◎</span>
+        <h1>Site Scanner</h1>
+      </div>
+      <div id="health" class="health health--unknown" title="Puppeteer + Chrome health">
+        <span class="dot"></span>
+        <span class="health-text">Checking environment…</span>
+        <button id="recheck" class="ghost-btn" type="button">Recheck</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel controls">
+        <h2>Scan</h2>
+        <label class="field">
+          <span>Website URL</span>
+          <input id="url" type="url" placeholder="https://example.com" autocomplete="off" />
+        </label>
+
+        <div class="row">
+          <label class="field">
+            <span>Scan level</span>
+            <input id="level" type="number" min="0" max="6" value="2" />
+          </label>
+          <label class="field">
+            <span>Delay between shots (ms)</span>
+            <input id="delay" type="number" min="0" step="100" value="2000" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Proxy <small>(optional)</small></span>
+          <input id="proxy" type="text" placeholder="http://user:pass@host:port" autocomplete="off" />
+        </label>
+
+        <div id="ipTip" class="ip-tip">
+          <div class="ip-tip-head">
+            <span class="ip-tip-label">Scanner outbound IP</span>
+            <code id="outboundIp" class="ip-value">…</code>
+            <button id="copyIp" class="ghost-btn" type="button" disabled>Copy</button>
+            <button id="retryIp" class="ghost-btn" type="button">Retry</button>
+          </div>
+          <p class="ip-tip-text">
+            Scanning your own site or a client site behind Cloudflare? In
+            <strong>Security &rarr; WAF &rarr; Custom rules</strong>, add a rule to
+            <strong>Skip</strong> requests from this IP so the crawler is not blocked.
+            If you use a proxy above, whitelist the proxy IP instead.
+          </p>
+        </div>
+
+        <div class="actions">
+          <button id="scanBtn" class="primary" type="button">Map links</button>
+          <button id="shotBtn" class="secondary" type="button" disabled>Screenshot pages</button>
+          <button id="stopBtn" class="danger" type="button" disabled>Stop</button>
+        </div>
+
+        <div id="stats" class="stats hidden">
+          <div><strong id="statTotal">0</strong><span>total</span></div>
+          <div><strong id="statUnique">0</strong><span>unique</span></div>
+          <div><strong id="statDup">0</strong><span>duplicates</span></div>
+        </div>
+
+        <div id="progress" class="progress hidden">
+          <div class="progress-label" id="progressLabel">Idle</div>
+          <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+        </div>
+      </section>
+
+      <section class="panel results">
+        <div class="results-head">
+          <h2>Link map</h2>
+          <span class="legend">
+            <span class="legend-item"><i class="swatch swatch--real"></i> unique page</span>
+            <span class="legend-item"><i class="swatch swatch--dup"></i> duplicate (already mapped)</span>
+          </span>
+        </div>
+        <div id="tree" class="tree">
+          <p class="empty">Enter a URL and click <strong>Map links</strong> to begin.</p>
+        </div>
+
+        <div class="gallery-bar">
+          <h2>Screenshot gallery</h2>
+          <div class="gallery-controls">
+            <select id="gallerySelect" aria-label="Screenshot folder">
+              <option value="">Select folder…</option>
+            </select>
+            <button id="galleryOpen" class="secondary" type="button" disabled>Open</button>
+            <button id="galleryRefresh" class="ghost-btn" type="button">Refresh</button>
+            <button id="galleryToggleAll" class="ghost-btn" type="button" disabled>Expand all</button>
+          </div>
+        </div>
+        <div id="gallery" class="gallery hidden">
+          <div id="galleryMeta" class="gallery-meta"></div>
+          <div id="galleryGrid" class="gallery-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

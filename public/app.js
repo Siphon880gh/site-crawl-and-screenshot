@@ -1,0 +1,502 @@
+'use strict';
+
+const $ = (id) => document.getElementById(id);
+
+const state = {
+  jobId: null,
+  source: null,
+  nodes: [],
+  nodeById: new Map(),
+  expectedShots: 0,
+  viewingGalleryId: null,
+  galleries: [],
+  expandedGalleryByFolder: new Map(),
+};
+
+function expandedFilesFor(folderId) {
+  if (!state.expandedGalleryByFolder.has(folderId)) {
+    state.expandedGalleryByFolder.set(folderId, new Set());
+  }
+  return state.expandedGalleryByFolder.get(folderId);
+}
+
+// ---- Outbound IP + Cloudflare tip ----------------------------------------
+async function loadOutboundIp(force = false) {
+  const el = $('outboundIp');
+  const copyBtn = $('copyIp');
+  const tip = $('ipTip');
+  el.textContent = '…';
+  copyBtn.disabled = true;
+  tip.classList.remove('ip-tip--bad');
+  try {
+    const r = await fetch(`/api/ip${force ? '?force=1' : ''}`);
+    const data = await r.json();
+    if (data.ok && data.ip) {
+      el.textContent = data.ip;
+      copyBtn.disabled = false;
+      const src = data.source ? ` via ${data.source}` : '';
+      tip.querySelector('.ip-tip-text').innerHTML = `
+        Scanning your own site or a client site behind Cloudflare? In
+        <strong>Security &rarr; WAF &rarr; Custom rules</strong>, add a rule to
+        <strong>Skip</strong> requests from this IP so the crawler is not blocked.
+        If you use a proxy above, whitelist the proxy IP instead.
+        <br><small>Detected${src}.</small>`;
+    } else {
+      el.textContent = 'Unavailable';
+      tip.classList.add('ip-tip--bad');
+      const tried = data.tried ? ` Tried: ${data.tried.join(', ')}.` : '';
+      tip.querySelector('.ip-tip-text').innerHTML = `
+        Could not detect outbound IP.${tried} Click <strong>Retry</strong> or set
+        <code>OUTBOUND_IP</code> in the server environment.`;
+    }
+  } catch (_) {
+    el.textContent = 'Unavailable';
+    tip.classList.add('ip-tip--bad');
+  }
+}
+
+function copyOutboundIp() {
+  const ip = $('outboundIp').textContent;
+  if (!ip || ip === '…' || ip === 'Unavailable') return;
+  navigator.clipboard.writeText(ip).then(() => {
+    const btn = $('copyIp');
+    const prev = btn.textContent;
+    btn.textContent = 'Copied';
+    setTimeout(() => (btn.textContent = prev), 1500);
+  });
+}
+
+// ---- Gallery -----------------------------------------------------------
+function formatGalleryLabel(g) {
+  const when = new Date(g.createdAt).toLocaleString();
+  const host = g.url ? (() => { try { return new URL(g.url).host; } catch (_) { return g.url; } })() : g.id;
+  return `${host} · ${g.count} shot${g.count === 1 ? '' : 's'} · ${when}`;
+}
+
+async function loadGalleries(selectId) {
+  try {
+    const r = await fetch('/api/galleries');
+    const data = await r.json();
+    state.galleries = data.galleries || [];
+    const sel = $('gallerySelect');
+    const prev = selectId || sel.value;
+    sel.innerHTML = '<option value="">Select folder…</option>';
+    state.galleries.forEach((g) => {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = formatGalleryLabel(g);
+      sel.appendChild(opt);
+    });
+    if (prev && state.galleries.some((g) => g.id === prev)) {
+      sel.value = prev;
+    } else if (selectId && state.galleries.some((g) => g.id === selectId)) {
+      sel.value = selectId;
+    }
+    $('galleryOpen').disabled = !sel.value;
+  } catch (_) {
+    /* ignore */
+  }
+}
+
+async function openGallery(id) {
+  if (!id) return;
+  try {
+    const r = await fetch(`/api/galleries/${id}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Could not open gallery');
+
+    state.viewingGalleryId = id;
+    $('gallery').classList.remove('hidden');
+    $('galleryToggleAll').disabled = !data.images.length;
+
+    const meta = $('galleryMeta');
+    const parts = [`<strong>${data.id}</strong>`];
+    if (data.url) parts.push(` · ${data.url}`);
+    parts.push(` · ${data.images.length} screenshot${data.images.length === 1 ? '' : 's'}`);
+    meta.innerHTML = parts.join('');
+
+    renderGalleryRows(data.id, data.images);
+  } catch (err) {
+    $('galleryMeta').textContent = err.message;
+    $('galleryGrid').innerHTML = '';
+    $('gallery').classList.remove('hidden');
+    $('galleryToggleAll').disabled = true;
+  }
+}
+
+function renderGalleryRows(folderId, images) {
+  const grid = $('galleryGrid');
+  grid.innerHTML = '';
+  if (!images.length) {
+    grid.innerHTML = '<p class="empty">No screenshots yet — they will appear here as they are captured.</p>';
+    $('galleryToggleAll').disabled = true;
+    return;
+  }
+
+  const expanded = expandedFilesFor(folderId);
+  $('galleryToggleAll').disabled = false;
+  images.forEach((img) => {
+    const row = document.createElement('details');
+    row.className = 'gallery-row';
+    row.dataset.file = img.file;
+    if (expanded.has(img.file)) row.open = true;
+
+    row.innerHTML = `
+      <summary class="gallery-row-head">
+        <span class="gallery-row-chevron" aria-hidden="true"></span>
+        <span class="gallery-row-title">${img.file}</span>
+      </summary>
+      <div class="gallery-row-body">
+        <a href="${img.url}" target="_blank" rel="noopener">
+          <img loading="lazy" src="${img.url}" alt="${img.file}">
+        </a>
+      </div>`;
+
+    row.addEventListener('toggle', () => {
+      if (row.open) expanded.add(img.file);
+      else expanded.delete(img.file);
+      updateGalleryToggleButton();
+    });
+
+    grid.appendChild(row);
+  });
+  updateGalleryToggleButton();
+}
+
+function galleryRows() {
+  return Array.from(document.querySelectorAll('.gallery-row'));
+}
+
+function updateGalleryToggleButton() {
+  const btn = $('galleryToggleAll');
+  const rows = galleryRows();
+  if (!rows.length) {
+    btn.disabled = true;
+    btn.textContent = 'Expand all';
+    return;
+  }
+  btn.disabled = false;
+  const allOpen = rows.every((row) => row.open);
+  btn.textContent = allOpen ? 'Collapse all' : 'Expand all';
+}
+
+function toggleAllGallery() {
+  if (!state.viewingGalleryId) return;
+  const rows = galleryRows();
+  if (!rows.length) return;
+
+  const expanded = expandedFilesFor(state.viewingGalleryId);
+  const allOpen = rows.every((row) => row.open);
+
+  if (allOpen) {
+    expanded.clear();
+    rows.forEach((row) => {
+      row.open = false;
+    });
+  } else {
+    rows.forEach((row) => {
+      row.open = true;
+      expanded.add(row.dataset.file);
+    });
+  }
+  updateGalleryToggleButton();
+}
+
+function onGallerySelectChange() {
+  $('galleryOpen').disabled = !$('gallerySelect').value;
+}
+
+// ---- Health --------------------------------------------------------------
+async function loadHealth() {
+  const el = $('health');
+  const text = el.querySelector('.health-text');
+  el.className = 'health health--unknown';
+  text.textContent = 'Checking environment…';
+  try {
+    const r = await fetch('/api/health');
+    const h = await r.json();
+    if (h.ok) {
+      el.className = 'health health--ok';
+      text.textContent = `Puppeteer v${h.puppeteer.version} · ${h.launch.browserVersion}`;
+    } else {
+      el.className = 'health health--bad';
+      const reason =
+        (!h.puppeteer.ok && h.puppeteer.error) ||
+        (!h.chrome.ok && h.chrome.error) ||
+        (!h.launch.ok && h.launch.error) ||
+        'Environment not ready';
+      text.textContent = reason;
+    }
+  } catch (err) {
+    el.className = 'health health--bad';
+    text.textContent = 'Health check failed';
+  }
+}
+
+// ---- Rendering -----------------------------------------------------------
+function badge(node) {
+  return node.isDuplicate ? 'dup' : `L${node.depth}`;
+}
+
+function renderTree(nodes, rootId) {
+  state.nodes = nodes;
+  state.nodeById = new Map(nodes.map((n) => [n.id, n]));
+  const tree = $('tree');
+  tree.innerHTML = '';
+  const root = state.nodeById.get(rootId);
+  if (!root) {
+    tree.innerHTML = '<p class="empty">No links found.</p>';
+    return;
+  }
+  tree.appendChild(renderNode(root));
+}
+
+function renderNode(node) {
+  const wrap = document.createElement('div');
+  wrap.className = 'node' + (node.isDuplicate ? ' dup' : '');
+  wrap.id = `node-${node.id}`;
+
+  const row = document.createElement('div');
+  row.className = 'node-row';
+
+  const b = document.createElement('span');
+  b.className = 'badge';
+  b.textContent = badge(node);
+  row.appendChild(b);
+
+  const a = document.createElement('a');
+  a.className = 'node-url';
+  a.href = node.url;
+  a.target = '_blank';
+  a.rel = 'noopener';
+  a.textContent = node.url;
+  row.appendChild(a);
+
+  const shot = document.createElement('span');
+  shot.className = 'badge shot';
+  shot.textContent = '';
+  row.appendChild(shot);
+
+  wrap.appendChild(row);
+
+  if (node.children && node.children.length) {
+    const kids = document.createElement('div');
+    kids.className = 'node-children';
+    node.children.forEach((cid) => {
+      const child = state.nodeById.get(cid);
+      if (child) kids.appendChild(renderNode(child));
+    });
+    wrap.appendChild(kids);
+  }
+  return wrap;
+}
+
+function setProgress(label, pct) {
+  $('progress').classList.remove('hidden');
+  $('progressLabel').textContent = label;
+  if (typeof pct === 'number') $('progressFill').style.width = `${Math.min(100, pct)}%`;
+}
+
+// ---- SSE event handling --------------------------------------------------
+function openStream(jobId) {
+  if (state.source) state.source.close();
+  const es = new EventSource(`/api/events/${jobId}`);
+  state.source = es;
+  es.onmessage = (e) => {
+    let evt;
+    try {
+      evt = JSON.parse(e.data);
+    } catch (_) {
+      return;
+    }
+    handleEvent(evt);
+  };
+  es.onerror = () => {
+    /* keep-alive will reconnect; ignore transient errors */
+  };
+}
+
+function handleEvent(evt) {
+  switch (evt.type) {
+    case 'crawl:visit':
+      setProgress(`Crawling: ${evt.url}  (${evt.processed} done · ${evt.queued} queued)`);
+      break;
+    case 'crawl:error':
+      setProgress(`Error on ${evt.url}`);
+      break;
+    case 'crawl:result':
+      renderTree(evt.nodes, evt.rootId);
+      updateStats(evt.nodes);
+      finishCrawl();
+      break;
+    case 'crawl:fatal':
+      setProgress(`Crawl failed: ${evt.error}`);
+      resetButtons();
+      break;
+    case 'shot:start': {
+      clearActive();
+      const el = $(`node-${evt.id}`);
+      if (el) {
+        el.classList.add('active');
+        const sb = el.querySelector('.badge.shot');
+        if (sb) sb.textContent = '📷 shooting';
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+      setProgress(
+        `Screenshotting ${evt.index}/${evt.total}: ${evt.url}`,
+        (evt.index / evt.total) * 100
+      );
+      break;
+    }
+    case 'shot:done': {
+      const el = $(`node-${evt.id}`);
+      if (el) {
+        el.classList.remove('active');
+        el.classList.add('shot-done');
+        const sb = el.querySelector('.badge.shot');
+        if (sb) sb.textContent = '✓ shot';
+      }
+      break;
+    }
+    case 'shot:error': {
+      const el = $(`node-${evt.id}`);
+      if (el) {
+        el.classList.remove('active');
+        el.classList.add('shot-error');
+        const sb = el.querySelector('.badge.shot');
+        if (sb) sb.textContent = '✗ failed';
+      }
+      break;
+    }
+    case 'shot:wait':
+      setProgress(`Waiting ${evt.ms}ms before page ${evt.next}/${evt.total}…`);
+      break;
+    case 'gallery:updated':
+      loadGalleries(evt.jobId);
+      if (state.viewingGalleryId === evt.jobId) openGallery(evt.jobId);
+      break;
+    case 'shot:result':
+      loadGalleries(evt.baseDir ? evt.baseDir.split('/').pop() : state.jobId);
+      setProgress(evt.state === 'stopped' ? 'Stopped — partial gallery saved' : 'Screenshots complete', 100);
+      resetButtons();
+      break;
+    case 'shot:stopped':
+      setProgress('Stopped — open gallery to view captured shots.');
+      resetButtons();
+      break;
+    case 'shot:fatal':
+      setProgress(`Screenshots failed: ${evt.error}`);
+      resetButtons();
+      break;
+    case 'crawl:stopped':
+      setProgress('Crawl stopped.');
+      break;
+  }
+}
+
+function updateStats(nodes) {
+  const total = nodes.length;
+  const dup = nodes.filter((n) => n.isDuplicate).length;
+  $('statTotal').textContent = total;
+  $('statUnique').textContent = total - dup;
+  $('statDup').textContent = dup;
+  $('stats').classList.remove('hidden');
+}
+
+function clearActive() {
+  document.querySelectorAll('.node.active').forEach((n) => n.classList.remove('active'));
+}
+
+function busy(isBusy, phase) {
+  $('scanBtn').disabled = isBusy;
+  $('stopBtn').disabled = !isBusy;
+  if (phase === 'crawl') $('shotBtn').disabled = true;
+}
+function finishCrawl() {
+  $('scanBtn').disabled = false;
+  $('stopBtn').disabled = true;
+  $('shotBtn').disabled = state.nodes.filter((n) => !n.isDuplicate).length === 0;
+}
+function resetButtons() {
+  $('scanBtn').disabled = false;
+  $('stopBtn').disabled = true;
+  $('shotBtn').disabled = state.nodes.filter((n) => !n.isDuplicate).length === 0;
+}
+
+async function startScan() {
+  const url = $('url').value.trim();
+  if (!url) {
+    $('url').focus();
+    return;
+  }
+  const level = parseInt($('level').value, 10);
+  const proxy = $('proxy').value.trim();
+
+  $('tree').innerHTML = '<p class="empty">Crawling…</p>';
+  $('stats').classList.add('hidden');
+  busy(true, 'crawl');
+  setProgress('Launching browser…', 0);
+
+  try {
+    const r = await fetch('/api/crawl', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, level, proxy }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed to start crawl');
+    state.jobId = data.jobId;
+    openStream(state.jobId);
+  } catch (err) {
+    setProgress(`Error: ${err.message}`);
+    resetButtons();
+  }
+}
+
+async function startShots() {
+  if (!state.jobId) return;
+  const delay = parseInt($('delay').value, 10);
+  busy(true, 'shot');
+  setProgress('Starting screenshots…', 0);
+  try {
+    const r = await fetch('/api/screenshot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jobId: state.jobId, delay }),
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || 'Failed to start screenshots');
+  } catch (err) {
+    setProgress(`Error: ${err.message}`);
+    resetButtons();
+  }
+}
+
+async function stopJob() {
+  if (!state.jobId) return;
+  $('stopBtn').disabled = true;
+  await fetch('/api/stop', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: state.jobId }),
+  }).catch(() => {});
+}
+
+// ---- Wire up -------------------------------------------------------------
+$('scanBtn').addEventListener('click', startScan);
+$('shotBtn').addEventListener('click', startShots);
+$('stopBtn').addEventListener('click', stopJob);
+$('recheck').addEventListener('click', loadHealth);
+$('copyIp').addEventListener('click', copyOutboundIp);
+$('retryIp').addEventListener('click', () => loadOutboundIp(true));
+$('gallerySelect').addEventListener('change', onGallerySelectChange);
+$('galleryOpen').addEventListener('click', () => openGallery($('gallerySelect').value));
+$('galleryRefresh').addEventListener('click', () => loadGalleries());
+$('galleryToggleAll').addEventListener('click', toggleAllGallery);
+$('url').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') startScan();
+});
+
+loadHealth();
+loadOutboundIp();
+loadGalleries();
