@@ -1,0 +1,161 @@
+# AGENTS_CODE_REFERENCE — UI (Frontend)
+
+> **Note for AI tools:** Approximate location cues are used instead of exact line numbers. This is intentional.
+
+Scope: `public/` — static HTML, CSS, vanilla JS. No bundler or framework.
+
+Parent overview: [AGENTS_CODE_REFERENCE.md](./AGENTS_CODE_REFERENCE.md)
+
+---
+
+## Pages
+
+| File | Lines | Role |
+|------|-------|------|
+| `index.html` | ~121 | Main app: scan controls, link tree, gallery |
+| `credits.html` | ~63 | Author bio, links; nav back to `/` |
+| `style.css` | ~446 | Shared dark theme (CSS variables in `:root`) |
+| `app.js` | ~502 | All client logic (loaded only on index) |
+
+Branding: **Site Crawl and Screenshot** (rebrand commit `b95396e`). Logo character `◎` in header.
+
+---
+
+## `index.html` structure
+
+Top to bottom:
+
+1. **Header** — brand, health widget (`#health`, `#recheck`), nav link to `/credits.html`
+2. **Controls panel** — URL, scan level (0–6), shot delay (ms), optional proxy
+3. **IP tip** (`#ipTip`) — outbound IP display + Cloudflare WAF whitelist guidance
+4. **Actions** — Map links / Screenshot pages / Stop
+5. **Stats** — total / unique / duplicates (hidden until crawl completes)
+6. **Progress bar** — label + fill width
+7. **Results** — link map tree (`#tree`), screenshot gallery selector + grid
+8. **Footer** — link to credits, Weng Industries
+
+Element IDs are the contract with `app.js`; preserve them when editing markup.
+
+---
+
+## `app.js` architecture
+
+Single `'use strict'` IIFE-style file with sections marked by comment banners.
+
+### Global state object (near top)
+
+```javascript
+const state = {
+  jobId: null,
+  source: null,           // EventSource
+  nodes: [],
+  nodeById: new Map(),
+  expectedShots: 0,
+  viewingGalleryId: null,
+  galleries: [],
+  expandedGalleryByFolder: new Map(), // persists expand/collapse per folder
+};
+```
+
+Helper `$ = (id) => document.getElementById(id)`.
+
+---
+
+## Feature areas in `app.js`
+
+### Outbound IP (top section)
+
+- `loadOutboundIp(force)` → `GET /api/ip` or `?force=1`
+- Updates `#outboundIp`, copy button, tip text (Cloudflare guidance or error + `OUTBOUND_IP` hint)
+- `copyOutboundIp()` uses clipboard API
+
+### Gallery (below IP section)
+
+- `loadGalleries(selectId?)` → `GET /api/galleries`, populates `#gallerySelect`
+- `openGallery(id)` → `GET /api/galleries/:id`, renders collapsible `<details>` rows
+- `renderGalleryRows`, `toggleAllGallery`, `updateGalleryToggleButton` — expand state stored in `state.expandedGalleryByFolder`
+- Live refresh on SSE `gallery:updated` and after `shot:result`
+
+### Health (middle section)
+
+- `loadHealth()` → `GET /api/health`, toggles `.health--ok|bad|unknown` on `#health`
+
+### Link tree rendering (middle section)
+
+- `renderTree(nodes, rootId)` — builds nested `.node` divs from flat `nodes` + `children` id refs
+- `renderNode(node)` — badge (`L{n}` or `dup`), link, empty `.badge.shot` placeholder
+- Duplicate nodes get class `dup` (gray styling in CSS)
+
+### Progress UI
+
+- `setProgress(label, pct?)` — shows `#progress`, sets label and optional bar width %
+
+### SSE (middle section)
+
+- `openStream(jobId)` — `EventSource('/api/events/' + jobId)`, parses JSON in `onmessage`
+- `handleEvent(evt)` — large `switch (evt.type)` updating tree, progress, gallery, buttons
+
+Important UI reactions:
+
+| Event | UI behavior |
+|-------|-------------|
+| `crawl:visit` | Progress text with queue counts |
+| `crawl:result` | `renderTree`, `updateStats`, `finishCrawl` |
+| `crawl:fatal` | Error progress, `resetButtons` |
+| `shot:start` | Highlight node `.active`, scroll into view, progress % |
+| `shot:done` | `.shot-done`, badge `✓ shot` |
+| `shot:error` | `.shot-error`, badge `✗ failed` |
+| `gallery:updated` | Refresh gallery list; re-open if viewing same job |
+| `shot:result` | Complete progress, `resetButtons`, refresh galleries |
+
+### Button state helpers (lower section)
+
+- `busy(isBusy, phase)` — disables scan during work; stop enabled when busy
+- `finishCrawl()` — enables screenshot if unique nodes exist
+- `resetButtons()` — idle state after completion/error
+
+### User actions (lower section)
+
+- `startScan()` → `POST /api/crawl`, stores `state.jobId`, opens SSE
+- `startShots()` → `POST /api/screenshot` with delay from `#delay`
+- `stopJob()` → `POST /api/stop`
+
+### Initialization (end of file)
+
+Event listeners wired; on load: `loadHealth()`, `loadOutboundIp()`, `loadGalleries()`.
+
+---
+
+## `style.css` conventions
+
+Near the top: CSS custom properties (`--bg`, `--panel`, `--accent`, `--dup`, `--ok`, `--danger`, …).
+
+Key class groups:
+
+- **Layout:** `.topbar`, `.layout`, `.panel`, `.controls`, `.results`
+- **Tree:** `.node`, `.node.dup`, `.node.active`, `.node.shot-done`, `.badge`, `.node-children`
+- **Gallery:** `.gallery-bar`, `.gallery-row` (`<details>`), `.gallery-list`
+- **IP tip:** `.ip-tip`, `.ip-tip--bad`
+- **Credits page:** `.credits-page`, `.credits-card`, `.credit-link` (used by `credits.html`)
+
+Sticky header with backdrop blur. No responsive framework — flex/grid used ad hoc.
+
+---
+
+## `credits.html`
+
+Standalone page sharing `style.css`. No `app.js`. Added in commit `1df6a9b`:
+
+- Author block with `/me.jpeg`
+- External links: wengindustries.com, LinkedIn, GitHub
+- Back nav to `/`
+
+---
+
+## UI modification guidelines
+
+1. **Event types are the API contract** — server and `handleEvent()` must stay aligned.
+2. **No framework** — keep DOM APIs consistent; avoid introducing build tooling without explicit request.
+3. **Gallery expand state** is per-folder in memory only (not persisted).
+4. **Enter key** on URL field triggers scan (`keydown` listener at bottom of `app.js`).
+5. **Screenshot button** stays disabled until crawl yields at least one non-duplicate node.
