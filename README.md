@@ -20,34 +20,114 @@ Puppeteer + Chrome.
 ## Requirements
 
 - Node.js 18+
-- Chrome (Puppeteer downloads its own Chromium on install; system Chrome can be
-  used via `PUPPETEER_EXECUTABLE_PATH`).
+- Puppeteer's Chrome binary (downloaded separately if missing — see
+  [Installing Chrome for Puppeteer](#installing-chrome-for-puppeteer-when-missing))
+- Optional: point at system Chrome with `PUPPETEER_EXECUTABLE_PATH`
 
-## Install
+## Getting started
+
+Install and run the app:
 
 ```bash
 npm install
-```
-
-If Chrome was not downloaded automatically:
-
-```bash
-npx puppeteer browsers install chrome
-```
-
-## Run
-
-```bash
 npm start
 ```
 
 Open http://localhost:3000.
+
+Check the **environment** pill in the header (see next section). If it is green,
+you are ready to scan. If it is red, Puppeteer or Chrome still needs setup —
+follow [Installing Chrome for Puppeteer](#installing-chrome-for-puppeteer-when-missing).
+
+## Environment check (header)
+
+The pill in the top bar shows whether the server can run scans. It updates on
+load and when you click **Recheck**.
+
+| Indicator | Meaning |
+| --------- | ------- |
+| Amber pulsing dot · `Checking environment…` | Health request in progress |
+| Green dot · `Puppeteer v24.x · HeadlessChrome/…` (or similar) | Ready — Puppeteer is installed and Chrome launched successfully |
+| Red dot · error message | Not ready — fix Puppeteer/Chrome before mapping links or taking screenshots |
+
+Typical red-dot messages:
+
+- **`Puppeteer is not installed: … Run "npm install".`** — dependencies missing; run `npm install` in the project directory.
+- **`Chrome executable not found at "…". Run "npx puppeteer browsers install chrome".`** — Puppeteer is present but its Chrome binary was never downloaded (or the cache path is wrong for the user running the app).
+- **`Could not resolve Chrome executable: …`** — Puppeteer cannot determine where Chrome should live (often a broken or partial install).
+- **`Failed to launch Chrome: …`** — binary exists but cannot start (common on Linux when OS libraries are missing — see [Installing Chrome for Puppeteer](#installing-chrome-for-puppeteer-when-missing)).
+- **`Environment not ready`** — generic fallback when the check fails without a specific message.
+- **`Health check failed`** — the browser could not reach `/api/health` (server down or network error).
+
+The same check runs in the terminal when you start the server (`npm start`) and via `npm run health`.
 
 ### Health check from the CLI
 
 ```bash
 npm run health
 ```
+
+Prints a JSON report with the same pass/fail details as the header.
+
+## Installing Chrome for Puppeteer (when missing)
+
+`npm install` pulls in the **Puppeteer npm package** but does not always download
+the **Chrome browser binary** Puppeteer drives. You only need this section if the
+header environment check is red (or `npm run health` reports failure).
+
+Download Chrome for Puppeteer:
+
+```bash
+npx puppeteer browsers install chrome
+```
+
+On **Linux servers**, Chrome also needs system libraries. Install the browser and
+OS dependencies together:
+
+```bash
+npx puppeteer browsers install chrome --install-deps
+```
+
+(`--install-deps` uses `apt` on Debian/Ubuntu; run with sufficient privileges
+if packages are installed system-wide.)
+
+### Linux server (app runs as root)
+
+If Node runs as **root** (common on shared hosting), Puppeteer stores Chrome
+under `/root/.cache/puppeteer`. Create the cache directory first, then install
+as the same user that runs the app:
+
+```bash
+sudo mkdir -p /root/.cache/puppeteer
+sudo chown -R root:root /root/.cache/puppeteer
+
+cd /path/to/site-crawl-and-screenshot
+sudo -H npx puppeteer browsers install chrome --install-deps
+```
+
+Verify the binary exists:
+
+```bash
+sudo find /root/.cache/puppeteer -type f -name "chrome" | head
+```
+
+Reload the app and click **Recheck** — the header should turn green.
+
+### Linux server (app runs as a non-root user)
+
+Run `npx puppeteer browsers install chrome --install-deps` as that user (no
+`sudo` on the install command unless `--install-deps` needs it). Chrome is cached
+under that user's home, e.g. `~/.cache/puppeteer`.
+
+### macOS / local dev
+
+After `npm install`, usually:
+
+```bash
+npx puppeteer browsers install chrome
+```
+
+No `--install-deps` needed on macOS.
 
 ## How scan levels work
 
