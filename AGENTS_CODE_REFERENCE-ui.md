@@ -90,9 +90,10 @@ Helper `$ = (id) => document.getElementById(id)`.
 ### Link tree rendering (middle section)
 
 - `renderTree(nodes, rootId)` — builds nested `.node` divs from flat `nodes` + `children` id refs
-- `renderNode(node)` — badge (`L{n}` or `dup`), link; **unique nodes only** get an empty `.badge.shot` placeholder
-- Duplicate nodes get class `dup` (gray styling in CSS); no shot badge and no green shot indicator
-- `clearDupShotUi(url, exceptId)` — strips `.active` / `.shot-done` / `.shot-error` from duplicate rows sharing a URL (safety net)
+- `renderNode(node)` — badge (`L{n}` or `dup`), link; **unique page nodes only** get an empty `.badge.shot` placeholder
+- Duplicate nodes get class `dup`; skipped file nodes get class `skipped` (both grayed via `--dup` color); no shot badge and no green shot indicator
+- Helpers `isGrayedNode(node)` / `isShotNode(node)` — true when `isDuplicate || isSkipped` / eligible for screenshot UI
+- `clearDupShotUi(url, exceptId)` — strips `.active` / `.shot-done` / `.shot-error` from grayed rows sharing a URL (safety net)
 
 ### Progress UI
 
@@ -110,9 +111,9 @@ Important UI reactions:
 | `crawl:visit` | Progress text with queue counts |
 | `crawl:result` | `renderTree`, `updateStats`, `finishCrawl` |
 | `crawl:fatal` | Error progress, `resetButtons` |
-| `shot:start` | Unique nodes only: `.active`, badge `📷 shooting`, scroll into view; `clearDupShotUi` |
-| `shot:done` | Unique nodes only: `.shot-done`, badge `✓ shot`; `clearDupShotUi` |
-| `shot:error` | Unique nodes only: `.shot-error`, badge `✗ failed`; `clearDupShotUi` |
+| `shot:start` | Unique page nodes only: `.active`, badge `📷 shooting`, scroll into view; `clearDupShotUi` |
+| `shot:done` | Unique page nodes only: `.shot-done`, badge `✓ shot`; `clearDupShotUi` |
+| `shot:error` | Unique page nodes only: `.shot-error`, badge `✗ failed`; `clearDupShotUi` |
 | `gallery:updated` | Refresh gallery list; re-open if viewing same job |
 | `shot:result` | Complete progress, `resetButtons`, refresh galleries |
 
@@ -142,8 +143,8 @@ Near the top: CSS custom properties (`--bg`, `--panel`, `--accent`, `--dup`, `--
 Key class groups:
 
 - **Layout:** `.topbar`, `.layout`, `.panel`, `.controls`, `.results`
-- **Tree:** `.node`, `.node.dup`, `.node.active`, `.node.shot-done`, `.badge`, `.badge.shot`, `.node-children`
-- **Dup + shot:** `.node.dup .badge.shot` forced `display: none` (shot indicators only on unique rows)
+- **Tree:** `.node`, `.node.dup`, `.node.skipped`, `.node.active`, `.node.shot-done`, `.badge`, `.badge.shot`, `.node-children`
+- **Dup + skipped + shot:** `.node.dup .badge.shot` and `.node.skipped .badge.shot` forced `display: none` (shot indicators only on unique page rows)
 - **Gallery:** `.gallery-bar`, `.gallery-row` (`<details>`), `.gallery-list`, `.gallery-list--thumbnails`, `.gallery-thumbs`, `.gallery-thumb`
 - **IP tip:** `.ip-tip`, `.ip-tip--bad`
 - **Credits page:** `.credits-page`, `.credits-card`, `.credit-link` (used by `credits.html`)
@@ -168,5 +169,5 @@ Standalone page sharing `style.css`. No `app.js`. Added in commit `1df6a9b`:
 2. **No framework** — keep DOM APIs consistent; avoid introducing build tooling without explicit request.
 3. **Gallery UI state** (expand/collapse and full vs thumbnails view) is per-folder in memory only (not persisted).
 4. **Enter key** on URL field triggers scan (`keydown` listener at bottom of `app.js`).
-5. **Screenshot button** stays disabled until crawl yields at least one non-duplicate node.
-6. **Shot indicators** — only unique (non-`dup`) tree rows; duplicates must stay gray with no shot badge.
+5. **Screenshot button** stays disabled until crawl yields at least one screenshot-eligible page (`isShotNode` — not duplicate or skipped file).
+6. **Shot indicators** — only unique page rows; duplicates and skipped files stay gray with no shot badge.

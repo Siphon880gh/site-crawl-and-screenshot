@@ -279,6 +279,7 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
 .swatch--real { background: var(--accent); }
 .swatch--dup { background: var(--dup); }
+.swatch--skipped { background: var(--dup); opacity: 0.65; }
 
 .tree { font-size: 14px; line-height: 1.5; }
 .empty { color: var(--muted); }
@@ -310,6 +311,8 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .node.dup .node-url { color: var(--dup); }
 .node.dup .badge { color: var(--dup); }
+.node.skipped .node-url { color: var(--dup); }
+.node.skipped .badge { color: var(--dup); }
 .node.active .node-row { background: rgba(45, 212, 191, 0.15); outline: 1px solid var(--accent-2); }
 .node.shot-done .badge.shot { color: var(--ok); border-color: var(--ok); }
 .node.shot-error .badge.shot { color: var(--danger); border-color: var(--danger); }
@@ -319,9 +322,13 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .node.shot-error .badge.shot,
 .node.active .badge.shot { display: inline-block; }
 .node.dup .badge.shot { display: none !important; }
+.node.skipped .badge.shot { display: none !important; }
 .node.dup.shot-done .badge.shot,
 .node.dup.shot-error .badge.shot,
 .node.dup.active .badge.shot { display: none !important; }
+.node.skipped.shot-done .badge.shot,
+.node.skipped.shot-error .badge.shot,
+.node.skipped.active .badge.shot { display: none !important; }
 
 .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-top: 18px; }
 .thumb { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }

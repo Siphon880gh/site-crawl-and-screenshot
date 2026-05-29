@@ -144,7 +144,7 @@ app.post('/api/screenshot', async (req, res) => {
 
   const delayMs = Number.isFinite(+delay) ? Math.max(0, +delay) : 2000;
   // Only screenshot unique (non-duplicate) pages with a usable status.
-  const pages = job.nodes.filter((n) => !n.isDuplicate && n.status !== 'error');
+  const pages = job.nodes.filter((n) => !n.isDuplicate && !n.isSkipped && n.status !== 'error');
   res.json({ ok: true, count: pages.length });
 
   (async () => {

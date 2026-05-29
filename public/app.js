@@ -315,14 +315,23 @@ async function loadHealth() {
 }
 
 // ---- Rendering -----------------------------------------------------------
+function isGrayedNode(node) {
+  return node.isDuplicate || node.isSkipped;
+}
+
+function isShotNode(node) {
+  return node && !isGrayedNode(node);
+}
+
 function badge(node) {
-  return node.isDuplicate ? 'dup' : `L${node.depth}`;
+  if (node.isDuplicate) return 'dup';
+  return `L${node.depth}`;
 }
 
 function clearDupShotUi(url, exceptId) {
   if (!url) return;
   state.nodes
-    .filter((n) => n.isDuplicate && n.url === url && n.id !== exceptId)
+    .filter((n) => isGrayedNode(n) && n.url === url && n.id !== exceptId)
     .forEach((n) => {
       const el = $(`node-${n.id}`);
       if (!el) return;
@@ -347,7 +356,8 @@ function renderTree(nodes, rootId) {
 
 function renderNode(node) {
   const wrap = document.createElement('div');
-  wrap.className = 'node' + (node.isDuplicate ? ' dup' : '');
+  const grayed = isGrayedNode(node);
+  wrap.className = 'node' + (node.isDuplicate ? ' dup' : '') + (node.isSkipped ? ' skipped' : '');
   wrap.id = `node-${node.id}`;
 
   const row = document.createElement('div');
@@ -366,7 +376,7 @@ function renderNode(node) {
   a.textContent = node.url;
   row.appendChild(a);
 
-  if (!node.isDuplicate) {
+  if (!grayed) {
     const shot = document.createElement('span');
     shot.className = 'badge shot';
     shot.textContent = '';
@@ -432,7 +442,7 @@ function handleEvent(evt) {
     case 'shot:start': {
       clearActive();
       const node = state.nodeById.get(evt.id);
-      if (node?.isDuplicate) break;
+      if (!isShotNode(node)) break;
       const el = $(`node-${evt.id}`);
       if (el) {
         el.classList.add('active');
@@ -449,7 +459,7 @@ function handleEvent(evt) {
     }
     case 'shot:done': {
       const node = state.nodeById.get(evt.id);
-      if (node?.isDuplicate) break;
+      if (!isShotNode(node)) break;
       const el = $(`node-${evt.id}`);
       if (el) {
         el.classList.remove('active');
@@ -462,7 +472,7 @@ function handleEvent(evt) {
     }
     case 'shot:error': {
       const node = state.nodeById.get(evt.id);
-      if (node?.isDuplicate) break;
+      if (!isShotNode(node)) break;
       const el = $(`node-${evt.id}`);
       if (el) {
         el.classList.remove('active');
@@ -502,10 +512,15 @@ function handleEvent(evt) {
 function updateStats(nodes) {
   const total = nodes.length;
   const dup = nodes.filter((n) => n.isDuplicate).length;
+  const skipped = nodes.filter((n) => n.isSkipped).length;
   $('statTotal').textContent = total;
-  $('statUnique').textContent = total - dup;
+  $('statUnique').textContent = total - dup - skipped;
   $('statDup').textContent = dup;
   $('stats').classList.remove('hidden');
+}
+
+function shotCandidateCount() {
+  return state.nodes.filter((n) => isShotNode(n)).length;
 }
 
 function clearActive() {
@@ -520,12 +535,12 @@ function busy(isBusy, phase) {
 function finishCrawl() {
   $('scanBtn').disabled = false;
   $('stopBtn').disabled = true;
-  $('shotBtn').disabled = state.nodes.filter((n) => !n.isDuplicate).length === 0;
+  $('shotBtn').disabled = shotCandidateCount() === 0;
 }
 function resetButtons() {
   $('scanBtn').disabled = false;
   $('stopBtn').disabled = true;
-  $('shotBtn').disabled = state.nodes.filter((n) => !n.isDuplicate).length === 0;
+  $('shotBtn').disabled = shotCandidateCount() === 0;
 }
 
 async function startScan() {

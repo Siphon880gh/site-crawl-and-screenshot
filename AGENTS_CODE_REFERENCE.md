@@ -28,6 +28,8 @@ AI-oriented codebase map for safe modification, feature tracing, and implementat
 
 Duplicate links (same canonical URL seen again deeper in the tree) are shown grayed out and are **not** re-crawled or re-screenshotted.
 
+Non-page file links (videos, audio, images, PDFs, fonts, archives, etc.) are also grayed out with a **file (not screenshotted)** legend entry — discovered in the link map but never crawled or captured.
+
 ---
 
 ## Tech stack
@@ -114,14 +116,14 @@ User clicks "Map links"
   → job.nodes populated; state → crawled | stopped | error
 ```
 
-Crawl semantics: start URL is depth 0; pages with `depth < maxLevel` have `<a href>` extracted; internal same-site links only; first sighting = real node, later = `isDuplicate: true`.
+Crawl semantics: start URL is depth 0; pages with `depth < maxLevel` have `<a href>` extracted; internal same-site links only; first sighting = real node, later = `isDuplicate: true`; file-asset URLs (by extension) = `isSkipped: true` (grayed, not queued).
 
 ### 3. Screenshot pages
 
 ```
 User clicks "Screenshot pages"
   → POST /api/screenshot { jobId, delay }
-  → filters job.nodes: !isDuplicate && status !== 'error'
+  → filters job.nodes: !isDuplicate && !isSkipped && status !== 'error'
   → writeGalleryMeta → screenshotPages()
   → SSE: shot:start, shot:done, shot:wait, gallery:updated, shot:result
   → PNGs in screenshots/<jobId>/ as 001_host_path.png
@@ -165,7 +167,7 @@ Independent of active jobs: `GET /api/galleries` lists past runs; `GET /api/gall
 1. **Do not persist jobs** — restarting the server loses in-memory job state; only screenshot files survive.
 2. **Preserve SSE event shapes** — `public/app.js` `handleEvent()` switches on `evt.type`; adding types is safe; renaming breaks the UI.
 3. **Job IDs = gallery folder names** — `<hostname>_<YYYY.MM.DD>_<HHMM>_utc` from `buildGalleryId()` in `galleries.js` (collision suffix `_2`, `_3`, …); validated by `GALLERY_ID_RE` in `isJobDir`.
-4. **Duplicate nodes** — never pass `isDuplicate` pages to `screenshotPages`; crawler marks them, server filters them; UI shows shot badges only on unique rows (see `AGENTS_CODE_REFERENCE-ui.md`).
+4. **Duplicate and skipped nodes** — never pass `isDuplicate` or `isSkipped` pages to `screenshotPages`; crawler marks them, server filters them; UI shows shot badges only on unique page rows (see `AGENTS_CODE_REFERENCE-ui.md`).
 5. **Browser lifecycle** — crawl errors close the browser; screenshot phase re-launches if needed; always closed in screenshot `finally`.
 6. **No auth** — app assumes trusted local/single-user use; do not expose publicly without adding protection.
 
@@ -208,6 +210,7 @@ Node shape from crawler (middle of `src/crawler.js`):
 const node = {
   id, url, depth, parentId,
   isDuplicate: !!isDuplicate,
+  isSkipped: !!isSkipped,
   children: [],
   status: 'pending', // pending | crawled | error | skipped
 };

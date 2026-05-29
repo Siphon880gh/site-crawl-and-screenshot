@@ -13,7 +13,7 @@ Parent overview: [AGENTS_CODE_REFERENCE.md](./AGENTS_CODE_REFERENCE.md)
 | File | Lines | Exports | Used by |
 |------|-------|---------|---------|
 | `browser.js` | ~72 | `launchBrowser`, `newPage`, `parseProxy` | crawler, screenshotter, server |
-| `crawler.js` | ~171 | `crawl`, `normalizeUrl`, `sameSite` | server |
+| `crawler.js` | ~195 | `crawl`, `normalizeUrl`, `sameSite`, `isAssetUrl` | server |
 | `screenshotter.js` | ~113 | `screenshotPages`, `sanitizeFilename` | server |
 | `galleries.js` | ~95 | `listGalleries`, `getGallery`, `writeGalleryMeta` | server |
 | `health.js` | ~103 | `checkHealth` | server, CLI (`npm run health`) |
@@ -76,6 +76,10 @@ Near the top:
 
 Compares normalized hosts (www-insensitive).
 
+### `isAssetUrl(url)`
+
+Returns true when the URL pathname ends with a known non-page extension (video, audio, image, PDF, font, archive, etc.). Used during crawl to mark file links as skipped rather than queuing them for crawl or screenshot.
+
 ### `crawl({ startUrl, maxLevel, browser, onProgress, shouldStop })`
 
 Main export, bulk of file:
@@ -90,13 +94,14 @@ Main export, bulk of file:
    - Else `extractLinks(browser, node.url)`:
      - On error: `status = 'error'`, emit `crawl:error`
      - On success: for each internal link:
+       - If asset URL (`isAssetUrl`): `makeNode(..., isSkipped: true)` — not queued; repeat sighting → duplicate
        - If already in `seen`: `makeNode(..., isDuplicate: true)` — not queued
        - Else: real child, queued
    - Emit `crawl:expanded`
 3. Emit `crawl:done` stats
 4. Return `{ rootId, nodes: flat array }`
 
-**Node fields:** `id`, `url`, `depth`, `parentId`, `isDuplicate`, `children[]`, `status`, optional `error`
+**Node fields:** `id`, `url`, `depth`, `parentId`, `isDuplicate`, `isSkipped`, `children[]`, `status`, optional `error`
 
 ### `extractLinks(browser, url)`
 
@@ -224,7 +229,7 @@ health.js ──→ puppeteer (standalone launch for health)
 
 ## Modification guidelines
 
-1. **Changing `normalizeUrl`** affects deduplication site-wide — update tests manually; UI duplicate display depends on `isDuplicate`.
+1. **Changing `normalizeUrl` or `isAssetUrl`** affects deduplication and skipped-file detection site-wide — UI grayed display depends on `isDuplicate` / `isSkipped`.
 2. **Crawl depth** is controlled by server clamping `maxLevel` 0–6; crawler trusts passed value.
 3. **Screenshot timing** — `networkidle2` can hang on chatty sites; timeout is 45s per page.
 4. **Proxy credentials** must use `parseProxy` + `page.authenticate`; never pass user:pass in `--proxy-server`.

@@ -34,6 +34,18 @@ function sameSite(url, rootHost) {
   }
 }
 
+/** Non-page assets (video, audio, images, fonts, archives, …) — not crawled or screenshotted. */
+const ASSET_EXT_RE =
+  /\.(mp4|mov|webm|avi|mkv|m4v|ogv|wmv|flv|3gp|mp3|wav|ogg|oga|m4a|aac|flac|wma|opus|aiff|mid|midi|jpg|jpeg|png|gif|webp|svg|ico|bmp|tiff|tif|avif|heic|heif|pdf|zip|rar|7z|tar|gz|woff2?|ttf|eot|otf)$/i;
+
+function isAssetUrl(url) {
+  try {
+    return ASSET_EXT_RE.test(new URL(url).pathname);
+  } catch (_) {
+    return false;
+  }
+}
+
 /**
  * BFS crawl of internal links up to maxLevel.
  *
@@ -58,7 +70,7 @@ async function crawl({ startUrl, maxLevel = 2, browser, onProgress, shouldStop }
   const nodes = new Map(); // id -> node
   let idCounter = 0;
 
-  const makeNode = (url, depth, parentId, isDuplicate) => {
+  const makeNode = (url, depth, parentId, isDuplicate, isSkipped = false) => {
     const id = `n${idCounter++}`;
     const node = {
       id,
@@ -66,8 +78,9 @@ async function crawl({ startUrl, maxLevel = 2, browser, onProgress, shouldStop }
       depth,
       parentId,
       isDuplicate: !!isDuplicate,
+      isSkipped: !!isSkipped,
       children: [],
-      status: 'pending', // pending | crawled | error | skipped
+      status: isSkipped ? 'skipped' : 'pending', // pending | crawled | error | skipped
     };
     nodes.set(id, node);
     if (parentId && nodes.has(parentId)) {
@@ -125,6 +138,17 @@ async function crawl({ startUrl, maxLevel = 2, browser, onProgress, shouldStop }
       if (localSeen.has(norm)) continue; // dedupe within a single page
       localSeen.add(norm);
 
+      if (isAssetUrl(norm)) {
+        // Media / file links — grayed out, not crawled or screenshotted.
+        if (seen.has(norm)) {
+          makeNode(norm, childDepth, node.id, true);
+        } else {
+          seen.add(norm);
+          makeNode(norm, childDepth, node.id, false, true);
+        }
+        continue;
+      }
+
       if (seen.has(norm)) {
         // Already mapped elsewhere -> duplicate / grayed out leaf.
         makeNode(norm, childDepth, node.id, true);
@@ -146,8 +170,9 @@ async function crawl({ startUrl, maxLevel = 2, browser, onProgress, shouldStop }
   emit({
     type: 'crawl:done',
     total: flat.length,
-    unique: flat.filter((n) => !n.isDuplicate).length,
+    unique: flat.filter((n) => !n.isDuplicate && !n.isSkipped).length,
     duplicates: flat.filter((n) => n.isDuplicate).length,
+    skipped: flat.filter((n) => n.isSkipped).length,
   });
 
   return { rootId: root.id, nodes: flat };
@@ -168,4 +193,4 @@ async function extractLinks(browser, url) {
   }
 }
 
-module.exports = { crawl, normalizeUrl, sameSite };
+module.exports = { crawl, normalizeUrl, sameSite, isAssetUrl };

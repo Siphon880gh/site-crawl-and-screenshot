@@ -84,7 +84,7 @@ Returns full gallery via `getGallery(SHOTS_DIR, id)` or 404 if invalid/empty.
 **Body:** `{ jobId, delay? }`
 
 - 404 if unknown job; 409 if crawl not finished (`!job.nodes`)
-- Filters pages: `!n.isDuplicate && n.status !== 'error'`
+- Filters pages: `!n.isDuplicate && !n.isSkipped && n.status !== 'error'`
 - Responds `{ ok: true, count }` immediately
 - Background: `state = 'shooting'`, ensures browser, `writeGalleryMeta`, `screenshotPages(...)`
 - Progress events include `baseDir: '/screenshots/<jobId>'`
