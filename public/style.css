@@ -318,6 +318,10 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .node.shot-done .badge.shot,
 .node.shot-error .badge.shot,
 .node.active .badge.shot { display: inline-block; }
+.node.dup .badge.shot { display: none !important; }
+.node.dup.shot-done .badge.shot,
+.node.dup.shot-error .badge.shot,
+.node.dup.active .badge.shot { display: none !important; }
 
 .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-top: 18px; }
 .thumb { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }

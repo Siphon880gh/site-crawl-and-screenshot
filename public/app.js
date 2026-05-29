@@ -238,6 +238,19 @@ function badge(node) {
   return node.isDuplicate ? 'dup' : `L${node.depth}`;
 }
 
+function clearDupShotUi(url, exceptId) {
+  if (!url) return;
+  state.nodes
+    .filter((n) => n.isDuplicate && n.url === url && n.id !== exceptId)
+    .forEach((n) => {
+      const el = $(`node-${n.id}`);
+      if (!el) return;
+      el.classList.remove('active', 'shot-done', 'shot-error');
+      const sb = el.querySelector('.badge.shot');
+      if (sb) sb.textContent = '';
+    });
+}
+
 function renderTree(nodes, rootId) {
   state.nodes = nodes;
   state.nodeById = new Map(nodes.map((n) => [n.id, n]));
@@ -272,10 +285,12 @@ function renderNode(node) {
   a.textContent = node.url;
   row.appendChild(a);
 
-  const shot = document.createElement('span');
-  shot.className = 'badge shot';
-  shot.textContent = '';
-  row.appendChild(shot);
+  if (!node.isDuplicate) {
+    const shot = document.createElement('span');
+    shot.className = 'badge shot';
+    shot.textContent = '';
+    row.appendChild(shot);
+  }
 
   wrap.appendChild(row);
 
@@ -335,6 +350,8 @@ function handleEvent(evt) {
       break;
     case 'shot:start': {
       clearActive();
+      const node = state.nodeById.get(evt.id);
+      if (node?.isDuplicate) break;
       const el = $(`node-${evt.id}`);
       if (el) {
         el.classList.add('active');
@@ -342,6 +359,7 @@ function handleEvent(evt) {
         if (sb) sb.textContent = '📷 shooting';
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
+      clearDupShotUi(evt.url, evt.id);
       setProgress(
         `Screenshotting ${evt.index}/${evt.total}: ${evt.url}`,
         (evt.index / evt.total) * 100
@@ -349,6 +367,8 @@ function handleEvent(evt) {
       break;
     }
     case 'shot:done': {
+      const node = state.nodeById.get(evt.id);
+      if (node?.isDuplicate) break;
       const el = $(`node-${evt.id}`);
       if (el) {
         el.classList.remove('active');
@@ -356,9 +376,12 @@ function handleEvent(evt) {
         const sb = el.querySelector('.badge.shot');
         if (sb) sb.textContent = '✓ shot';
       }
+      clearDupShotUi(evt.url, evt.id);
       break;
     }
     case 'shot:error': {
+      const node = state.nodeById.get(evt.id);
+      if (node?.isDuplicate) break;
       const el = $(`node-${evt.id}`);
       if (el) {
         el.classList.remove('active');
@@ -366,6 +389,7 @@ function handleEvent(evt) {
         const sb = el.querySelector('.badge.shot');
         if (sb) sb.textContent = '✗ failed';
       }
+      clearDupShotUi(evt.url, evt.id);
       break;
     }
     case 'shot:wait':
