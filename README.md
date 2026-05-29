@@ -1,4 +1,4 @@
-# Site Scanner
+# Site Crawl and Screenshot
 
 Crawl a website's internal links and capture full-page screenshots using
 Puppeteer + Chrome.

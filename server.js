@@ -218,7 +218,7 @@ app.get('/api/events/:jobId', (req, res) => {
 // ---- Startup -------------------------------------------------------------
 
 app.listen(PORT, async () => {
-  console.log(`\nSite Scanner running at http://localhost:${PORT}`);
+  console.log(`\nSite Crawl and Screenshot running at http://localhost:${PORT}`);
   console.log('Running startup health check (Puppeteer + Chrome)...');
   try {
     const report = await checkHealth();

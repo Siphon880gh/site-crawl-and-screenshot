@@ -1,5 +1,5 @@
 {
-  "name": "site-scanner",
+  "name": "site-crawl-and-screenshot",
   "version": "1.0.0",
   "description": "Crawl a website's internal links and capture full-page screenshots with Puppeteer + Chrome.",
   "main": "server.js",
