@@ -17,6 +17,29 @@ Puppeteer + Chrome.
 - **Health check** — on startup (and on demand in the UI) the app verifies that
   Puppeteer is installed and a Chrome binary can actually launch.
 
+## Screenshots
+
+### Map internal links
+
+Enter a URL and scan level, then click **Map links**. The tree shows unique pages,
+duplicates (grayed out), and file URLs that will not be screenshotted.
+
+![Link map after crawl — unique pages, duplicates, and ready to screenshot](docs/README-assets/crawled-ready-to-screenshot.png)
+
+### Capture full-page screenshots
+
+Click **Screenshot pages** for every unique page. Progress shows which URL is
+being captured; duplicates and files are skipped.
+
+![Screenshot in progress with live page indicator](docs/README-assets/screenshooting.png)
+
+### Browse the gallery
+
+Finished runs appear in the **Screenshot gallery**. Switch folders, open full
+PNGs, or toggle **Thumbnails** / **Full size** and **Expand all**.
+
+![Screenshot gallery with full-page preview](docs/README-assets/screenshot-gallery.png)
+
 ## Requirements
 
 - Node.js 18+
